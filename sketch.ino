@@ -2,6 +2,7 @@
 #include "TM1637.h"
 #include <WiFiUdp.h>
 #include <WiFi.h>
+#include <HTTPClient.h>
 
 const char* ssid = "Wokwi-GUEST";
 const char* password = "";
@@ -26,6 +27,8 @@ int val = 0;
 
 TM1637 tm(DISPLAY_CLK, DISPLAY_DT);
 
+WiFiClientSecure client;
+HTTPClient http;
 // API for the percentage of renewable energy in germany: https://api.energy-charts.info/ren_share?country=de
 
 void readEncoder() {
@@ -93,13 +96,58 @@ void currentProd() {
 }
 
 void currentUse() {
-tm.displayStr("Usage");
+tm.displayStr("Use");
 tm.displayNum(80);
 }
 
 void currentPercent() {
 tm.displayStr("Perc");
-tm.displayNum("31.5");
+Serial1.println("Requesting");
+client.setInsecure();
+http.begin(client, "https://api.energy-charts.info/ren_share?country=de");
+http.GET();
+Serial1.print(http.getString());
+http.end();
+}
+
+void listenMulticast() {
+  int packetSize = Udp.parsePacket();
+    if (packetSize) {
+        Serial.printf("Received packet of size %d from %s, port %d\n", packetSize, Udp.remoteIP().toString().c_str(), Udp.remotePort());
+        
+        char* packetBuffer = (char*) malloc(packetSize + 1);
+        if (packetBuffer == NULL) {
+            Serial.println("Memory allocation failed!");
+            return;
+        }
+
+        int len = Udp.read(packetBuffer, packetSize);
+        packetBuffer[len] = 0;
+        for (int i = 56; i < packetSize - 5; i += 8) { // Ensure not to exceed buffer size
+          // Assuming little-endian (least significant byte first)
+          int b = packetBuffer[i];
+          int c = packetBuffer[i + 1];
+          int d = packetBuffer[i + 2];
+          int e = packetBuffer[i + 3];
+
+          // Check for the OBIS code "1:1.4.0"
+          if (e == 1 && d == 4 && c == 1 && b == 1) {
+              // Extract the data for "Bezug Wirkleistung" (assuming little-endian)
+              int bezug_wirk = ((packetBuffer[i + 5] << 8) | packetBuffer[i + 4]) / 10;
+              Serial.printf("Bezug Wirkleistung: %.1f W\n", bezug_wirk / 10.0);
+              break; // Exit the loop once you've found the data
+          } else {
+              Serial.println("Wrong OBIS code: ");
+              Serial.print(e, HEX); // Print as hexadecimal
+              Serial.print(d, HEX);
+              Serial.print(c, HEX);
+              Serial.print(b, HEX);
+              Serial.println();
+          }
+        }   
+
+        free(packetBuffer);
+    }
 }
 
 void setup() {
@@ -127,5 +175,5 @@ void setup() {
 
 void loop() {
   checkMotion();
-  delay(1000);
+  //list Multicast
 }
