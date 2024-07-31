@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "author": "The Bin - Hack Club",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "board-pi-pico-w", "id": "pico", "top": -41.65, "left": 99.55, "attrs": {} },
+    { "type": "wokwi-ky-040", "id": "wokwi-ky-040-0", "top": -7.9, "left": -192.8, "attrs": {} },
+    {
+      "type": "wokwi-pir-motion-sensor",
+      "id": "wokwi-pir-motion-sensor-0",
+      "top": 32.8,
+      "left": -45.78,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-tm1637-7segment",
+      "id": "wokwi-tm1637-7segment-0",
+      "top": 115.16,
+      "left": -309.77,
+      "attrs": {}
+    }
+  ],
+  "connections": [
+    [ "pico:GP0", "$serialMonitor:RX", "", [] ],
+    [ "pico:GP1", "$serialMonitor:TX", "", [] ],
+    [ "pico:3V3", "wokwi-pir-motion-sensor-0:VCC", "red", [ "h38.71", "v182.4", "h-307.2" ] ],
+    [ "wokwi-ky-040-0:VCC", "wokwi-pir-motion-sensor-0:VCC", "red", [ "h0" ] ],
+    [ "wokwi-pir-motion-sensor-0:GND", "pico:GND.3", "black", [ "v0" ] ],
+    [ "wokwi-ky-040-0:GND", "wokwi-pir-motion-sensor-0:GND", "black", [ "h0" ] ],
+    [ "wokwi-tm1637-7segment-0:GND", "wokwi-pir-motion-sensor-0:GND", "black", [ "h0" ] ],
+    [ "wokwi-tm1637-7segment-0:VCC", "pico:3V3", "red", [ "h0" ] ],
+    [ "wokwi-ky-040-0:CLK", "pico:GP2", "green", [ "h0" ] ],
+    [ "pico:GP3", "wokwi-ky-040-0:DT", "green", [ "h0" ] ],
+    [ "wokwi-pir-motion-sensor-0:OUT", "pico:GP6", "green", [ "v0" ] ],
+    [ "wokwi-tm1637-7segment-0:CLK", "pico:GP14", "green", [ "h0" ] ],
+    [ "wokwi-tm1637-7segment-0:DIO", "pico:GP15", "green", [ "h0" ] ]
+  ],
+  "dependencies": {}
+}
