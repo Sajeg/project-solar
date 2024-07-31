@@ -1,18 +1,14 @@
 #include <Arduino.h>
-#include <TM1637.h>
-#include <stdio.h>
-#include "pico/stdlib.h"
-#include "pico/cyw43_arch.h"
+#include "TM1637.h"
+#include <WiFiUdp.h>
 #include <WiFi.h>
-#include <lwip/netdb.h>
-#include <lwip/sockets.h>
-#include <lwip/dns.h>
 
 const char* ssid = "Wokwi-GUEST";
 const char* password = "";
 
-const char* multicastGroup = "239.12.255.254";
-const int multicastPort = 9522;
+WiFiUDP Udp;
+unsigned int multicastPort = 9522;
+IPAddress multicastIP(239,12,255,254);
 
 #define ENCODER_CLK 2
 #define ENCODER_DT  3
@@ -54,6 +50,8 @@ void readEncoder() {
   Serial1.println(displayScreen);
 
   clkLastState = clkState;
+
+  showDisplay();
 }
 
 void checkMotion() {
@@ -62,6 +60,7 @@ void checkMotion() {
     if (pirState == LOW) {
       Serial1.println("Motion detected!");
       tm.set(7);
+      showDisplay();
       pirState = HIGH;
     }
   } else {
@@ -72,6 +71,35 @@ void checkMotion() {
       pirState = LOW;
     }
   }
+}
+
+void showDisplay() {
+  Serial1.println("Showing a Display");
+  if (pirState != HIGH) {
+    return;
+  }
+  if (displayScreen == 0) {
+    currentProd();
+  } else if (displayScreen == 1) {
+    currentUse();
+  } else if (displayScreen == 2) {
+    currentPercent();
+  }
+}
+
+void currentProd() {
+  tm.displayStr("Prod");
+  tm.displayNum(120);
+}
+
+void currentUse() {
+tm.displayStr("Usage");
+tm.displayNum(80);
+}
+
+void currentPercent() {
+tm.displayStr("Perc");
+tm.displayNum("31.5");
 }
 
 void setup() {
@@ -94,21 +122,10 @@ void setup() {
   Serial1.println("Connected");
   Serial1.print("IP address: ");
   Serial1.println(WiFi.localIP());
+  //Udp.beginMulticast(multicastIP, multicastPort);
 }
 
 void loop() {
   checkMotion();
-  if (pirState == HIGH) {
-    tm.display(0, (counter / 1000) % 10);
-  tm.display(1, (counter / 100) % 10);
-  tm.display(2, (counter / 10) % 10);
-  tm.display(3, counter % 10);
-
-  counter++;
-  if (counter == 10000) {
-    counter = 0;
-  }
-
-  }
-  delay(100);
+  delay(1000);
 }
