@@ -110,41 +110,44 @@ Serial1.print(http.getString());
 http.end();
 }
 
+// Gets the Data that is to be displayed through a multicast signal send out by this: https://github.com/kettenbach-it/FHEM-SMA-Speedwire/blob/master/77_SMAEM.pm
 void listenMulticast() {
   int packetSize = Udp.parsePacket();
     if (packetSize) {
-        Serial.printf("Received packet of size %d from %s, port %d\n", packetSize, Udp.remoteIP().toString().c_str(), Udp.remotePort());
+        Serial1.printf("Received packet of size %d from %s, port %d\n", packetSize, Udp.remoteIP().toString().c_str(), Udp.remotePort());
         
         char* packetBuffer = (char*) malloc(packetSize + 1);
         if (packetBuffer == NULL) {
-            Serial.println("Memory allocation failed!");
+            Serial1.println("Memory allocation failed!");
             return;
         }
 
         int len = Udp.read(packetBuffer, packetSize);
         packetBuffer[len] = 0;
-        for (int i = 56; i < packetSize - 5; i += 8) { // Ensure not to exceed buffer size
-          // Assuming little-endian (least significant byte first)
-          int b = packetBuffer[i];
-          int c = packetBuffer[i + 1];
-          int d = packetBuffer[i + 2];
-          int e = packetBuffer[i + 3];
+        
+        // For Debug purpose
+        // for (int i = 0; i < packetSize - 5; i ++) {
+        //   int b = packetBuffer[i];
+        //   Serial.print("At pos ");
+        //   Serial.print(i);
+        //   Serial.print(" is value ");
+        //   Serial.print(b);
+        //   Serial.println();
+        // }
 
-          // Check for the OBIS code "1:1.4.0"
-          if (e == 1 && d == 4 && c == 1 && b == 1) {
-              // Extract the data for "Bezug Wirkleistung" (assuming little-endian)
-              int bezug_wirk = ((packetBuffer[i + 5] << 8) | packetBuffer[i + 4]) / 10;
-              Serial.printf("Bezug Wirkleistung: %.1f W\n", bezug_wirk / 10.0);
-              break; // Exit the loop once you've found the data
-          } else {
-              Serial.println("Wrong OBIS code: ");
-              Serial.print(e, HEX); // Print as hexadecimal
-              Serial.print(d, HEX);
-              Serial.print(c, HEX);
-              Serial.print(b, HEX);
-              Serial.println();
+        // Only captures every second OBIS Code
+        // Couldn't find a way to get every
+        // i = 28 or i = 36 depending on what Codes you want to receive
+        for (int i = 36; i < packetSize - 5; i += 16) {
+          // Check for OBIS Code 1:1.4.0
+          if (packetBuffer[i] == 0 && packetBuffer[i+1] == 1 && packetBuffer[i+2] == 8 && packetBuffer[i+3] == 0) {
+            float value;
+            memcpy(&value, &packetBuffer[i+6], 4);
+            // Doesn't work yet
+            // To-Do: Look at this https://github.com/datenschuft/SMA-EM
+            Serial1.printf("Value (OBIS 1:1.4.0): %.2f W\n", value);
           }
-        }   
+        }
 
         free(packetBuffer);
     }
