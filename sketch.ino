@@ -25,6 +25,16 @@ int displayScreen = 0;
 int pirState = LOW;  
 int val = 0;
 
+// Only the total data and without cosphi and frequency as I don't need them
+struct EnergyData {
+    float pconsume;
+    float psupply;
+    float qconsume;
+    float qsupply;
+    float sconsume;
+    float ssupply;
+};
+
 TM1637 tm(DISPLAY_CLK, DISPLAY_DT);
 
 WiFiClientSecure client;
@@ -96,61 +106,56 @@ void currentProd() {
 }
 
 void currentUse() {
-tm.displayStr("Use");
-tm.displayNum(80);
+  tm.displayStr("Use");
+  tm.displayNum(80);
 }
 
 void currentPercent() {
-tm.displayStr("Perc");
-Serial1.println("Requesting");
-client.setInsecure();
-http.begin(client, "https://api.energy-charts.info/ren_share?country=de");
-http.GET();
-Serial1.print(http.getString());
-http.end();
+  tm.displayStr("Perc");
+  Serial1.println("Requesting");
+  client.setInsecure();
+  http.begin(client, "https://api.energy-charts.info/ren_share?country=de");
+  http.GET();
+  Serial1.print(http.getString());
+  http.end();
 }
 
-// Gets the Data that is to be displayed through a multicast signal send out by this: https://github.com/kettenbach-it/FHEM-SMA-Speedwire/blob/master/77_SMAEM.pm
-void listenMulticast() {
-  int packetSize = Udp.parsePacket();
-    if (packetSize) {
-        Serial1.printf("Received packet of size %d from %s, port %d\n", packetSize, Udp.remoteIP().toString().c_str(), Udp.remotePort());
-        
-        char* packetBuffer = (char*) malloc(packetSize + 1);
-        if (packetBuffer == NULL) {
-            Serial1.println("Memory allocation failed!");
-            return;
-        }
+// Reworked approache, based on this: https://github.com/datenschuft/SMA-EM/
+EnergyData parseEnergyMeter(uint8_t* packetBuffer, int packetSize) {
+    EnergyData data = {};
 
-        int len = Udp.read(packetBuffer, packetSize);
-        packetBuffer[len] = 0;
-        
-        // For Debug purpose
-        // for (int i = 0; i < packetSize - 5; i ++) {
-        //   int b = packetBuffer[i];
-        //   Serial.print("At pos ");
-        //   Serial.print(i);
-        //   Serial.print(" is value ");
-        //   Serial.print(b);
-        //   Serial.println();
-        // }
-
-        // Only captures every second OBIS Code
-        // Couldn't find a way to get every
-        // i = 28 or i = 36 depending on what Codes you want to receive
-        for (int i = 36; i < packetSize - 5; i += 16) {
-          // Check for OBIS Code 1:1.4.0
-          if (packetBuffer[i] == 0 && packetBuffer[i+1] == 1 && packetBuffer[i+2] == 8 && packetBuffer[i+3] == 0) {
-            float value;
-            memcpy(&value, &packetBuffer[i+6], 4);
-            // Doesn't work yet
-            // To-Do: Look at this https://github.com/datenschuft/SMA-EM
-            Serial1.printf("Value (OBIS 1:1.4.0): %.2f W\n", value);
-          }
-        }
-
-        free(packetBuffer);
+    // 28 is the Header, so if it's smaller than the Header it can't be right
+    if (packetSize < 28 || memcmp(packetBuffer, "SMA", 3) != 0) {
+        return data;
     }
+
+    int position = 28;
+    while (position < packetSize) {
+        uint16_t measurement = (packetBuffer[position] << 8) | packetBuffer[position + 1];
+        uint8_t datatype = packetBuffer[position + 2];
+
+        if (datatype == 4) {
+            int32_t value = (packetBuffer[position + 4] << 24) | (packetBuffer[position + 5] << 16) |
+                            (packetBuffer[position + 6] << 8) | packetBuffer[position + 7];
+            float scaledValue = value / 10.0f;
+
+            switch (measurement) {
+                case 1: data.pconsume = scaledValue; break;
+                case 2: data.psupply = scaledValue; break;
+                case 3: data.qconsume = scaledValue; break;
+                case 4: data.qsupply = scaledValue; break;
+                case 9: data.sconsume = scaledValue; break;
+                case 10: data.ssupply = scaledValue; break;
+            }
+            position += 8;
+        } else if (datatype == 8) {
+            position += 12;
+        } else {
+            position += 8;
+        }
+    }
+
+    return data;
 }
 
 void setup() {
@@ -173,10 +178,29 @@ void setup() {
   Serial1.println("Connected");
   Serial1.print("IP address: ");
   Serial1.println(WiFi.localIP());
-  //Udp.beginMulticast(multicastIP, multicastPort);
+  // Look for explanation on why this is commented out below
+  // Udp.beginMulticast(multicastIP, multicastPort);
 }
 
 void loop() {
   checkMotion();
-  //list Multicast
+
+
+  // Doesn't work in this sumalted enviroment. because it requires to be in my local network
+  // I tested it on a esp32 that I had lying around
+  uint8_t packetBuffer[608];
+  int packetSize = Udp.parsePacket();
+
+  if (packetSize) {
+    Udp.read(packetBuffer, sizeof(packetBuffer));
+
+    EnergyData energyData = parseEnergyMeter(packetBuffer, packetSize);
+
+    Serial1.printf("pconsume: %.2f W\n", energyData.pconsume);
+    Serial1.printf("psupply: %.2f W\n", energyData.psupply);
+    Serial1.printf("qconsume: %.2f W\n", energyData.qconsume);
+    Serial1.printf("qsupply: %.2f W\n", energyData.qsupply);
+    Serial1.printf("sconsume: %.2f W\n", energyData.sconsume);
+    Serial1.printf("ssupply: %.2f W\n", energyData.ssupply);
+    }
 }
