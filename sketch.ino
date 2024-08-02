@@ -101,13 +101,41 @@ void showDisplay() {
 }
 
 void currentProd() {
-  tm.displayStr("Prod");
-  tm.displayNum(120);
+  tm.displayStr("CONS");
+  // Process Multicast data
+  // uint8_t packetBuffer[608];
+  // int packetSize = Udp.parsePacket();
+
+  // if (packetSize) {
+  //   Udp.read(packetBuffer, sizeof(packetBuffer));
+  //   EnergyData energyData = parseEnergyMeter(packetBuffer, packetSize);
+  //   tm.displayNum(energyData.pconsume);
+  // }
+
+  // But for this simulated env we use:
+  EnergyData energyData = {};
+  energyData.pconsume = 0.00;
+  energyData.psupply = 3195.80;
+  tm.displayNum(energyData.pconsume);
 }
 
 void currentUse() {
-  tm.displayStr("Use");
-  tm.displayNum(80);
+  tm.displayStr("SPLY");
+  // Process Multicast data
+  // uint8_t packetBuffer[608];
+  // int packetSize = Udp.parsePacket();
+
+  // if (packetSize) {
+  //   Udp.read(packetBuffer, sizeof(packetBuffer));
+  //   EnergyData energyData = parseEnergyMeter(packetBuffer, packetSize);
+  //   tm.displayNum(energyData.psupply);
+  // }
+
+  // But for this simulated env we use:
+  EnergyData energyData = {};
+  energyData.pconsume = 0.00;
+  energyData.psupply = 3195.80;
+  tm.displayNum(energyData.psupply);
 }
 
 void currentPercent() {
@@ -178,29 +206,9 @@ void setup() {
   Serial1.println("Connected");
   Serial1.print("IP address: ");
   Serial1.println(WiFi.localIP());
-  // Look for explanation on why this is commented out below
-  // Udp.beginMulticast(multicastIP, multicastPort);
+  //Udp.beginMulticast(multicastIP, multicastPort);
 }
 
 void loop() {
   checkMotion();
-
-
-  // Doesn't work in this sumalted enviroment. because it requires to be in my local network
-  // I tested it on a esp32 that I had lying around
-  uint8_t packetBuffer[608];
-  int packetSize = Udp.parsePacket();
-
-  if (packetSize) {
-    Udp.read(packetBuffer, sizeof(packetBuffer));
-
-    EnergyData energyData = parseEnergyMeter(packetBuffer, packetSize);
-
-    Serial1.printf("pconsume: %.2f W\n", energyData.pconsume);
-    Serial1.printf("psupply: %.2f W\n", energyData.psupply);
-    Serial1.printf("qconsume: %.2f W\n", energyData.qconsume);
-    Serial1.printf("qsupply: %.2f W\n", energyData.qsupply);
-    Serial1.printf("sconsume: %.2f W\n", energyData.sconsume);
-    Serial1.printf("ssupply: %.2f W\n", energyData.ssupply);
-    }
 }
