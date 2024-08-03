@@ -3,6 +3,7 @@
 #include <WiFiUdp.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <ArduinoJson.h>
 
 const char* ssid = "Wokwi-GUEST";
 const char* password = "";
@@ -128,12 +129,14 @@ void currentUse() {
 
 void currentPercent() {
   tm.displayStr("Perc");
-  // Serial1.println("Requesting");
-  // client.setInsecure();
-  // http.begin(client, "https://api.energy-charts.info/ren_share?country=de");
-  // http.GET();
-  // Serial1.print(http.getString());
-  // http.end();
+  JsonDocument doc;
+  Serial1.println("Requesting");
+  client.setInsecure();
+  http.begin(client, "https://api.energy-charts.info/ren_share?country=de");
+  http.GET();
+  deserializeJson(doc, http.getString());
+  Serial1.println(doc["data"].as<String>());
+  http.end();
 }
 
 // Reworked approache, based on this: https://github.com/datenschuft/SMA-EM/
@@ -205,7 +208,7 @@ void loop() {
     lastClk = newClk;
     int dtValue = digitalRead(ENCODER_DT);
     if (newClk == LOW && dtValue == HIGH) {
-      if(displayScreen >= 2) {
+      if(displayScreen >= 1) {
         displayScreen = -1;
       }
       displayScreen ++;
@@ -213,7 +216,7 @@ void loop() {
     }
     if (newClk == LOW && dtValue == LOW) {
       if(displayScreen <= 0) {
-        displayScreen = 3;
+        displayScreen = 2;
       }
       displayScreen --;
       showDisplay();
