@@ -2,3 +2,5 @@
 # See https://docs.wokwi.com/guides/libraries
 HttpClient
 ArduinoJson
+NTPClient
+Time

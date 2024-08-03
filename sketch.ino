@@ -4,11 +4,15 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include <NTPClient.h>
+#include <TimeLib.h>
+// #include "pico/multicore.h"
 
 const char* ssid = "Wokwi-GUEST";
 const char* password = "";
 
 WiFiUDP Udp;
+NTPClient timeClient(Udp);
 unsigned int multicastPort = 9522;
 IPAddress multicastIP(239,12,255,254);
 
@@ -89,6 +93,7 @@ void showDisplay() {
 }
 
 void currentUse() {
+  tm.displayNum(0);
   tm.displayStr("NET");
   delay(500);
   // Process Multicast data
@@ -127,16 +132,44 @@ void currentUse() {
   tm.displayNum(displayValue, decimal, true);
 }
 
-void currentPercent() {
-  tm.displayStr("Perc");
-  JsonDocument doc;
+void apiRequest() {
+  DynamicJsonDocument doc(2048);
   Serial1.println("Requesting");
   client.setInsecure();
+  http.useHTTP10(true);
   http.begin(client, "https://api.energy-charts.info/ren_share?country=de");
   http.GET();
-  deserializeJson(doc, http.getString());
-  Serial1.println(doc["data"].as<String>());
+  DeserializationError error = deserializeJson(doc, http.getStream());
+
+  if (error) {
+    Serial1.print("deserializeJson() failed: ");
+    Serial1.println(error.c_str());
+    return;
+  }
+
+  timeClient.update();
+
+  JsonArray data = doc[0]["data"];
+  JsonArray time = doc[0]["xAxisValues"];
+  float latestValue = 0.0;
+  long currentTime = 1722710273;
+  for(int i = 0; i < (time.size() - 1); i++) {
+    if((time[i] <= currentTime) && (currentTime < time[i+1])) {
+      float latestValue = data[i];
+      break;
+    }
+  }
+  
+  tm.displayNum(latestValue);
   http.end();
+}
+
+void currentPercent() {
+  tm.displayNum(0);
+  tm.displayStr("Perc");
+  // Should be in another thread, but browser crashes
+  // multicore_launch_core1(apiRequest);
+  apiRequest();
 }
 
 // Reworked approache, based on this: https://github.com/datenschuft/SMA-EM/
@@ -198,7 +231,10 @@ void setup() {
   Serial1.println("Connected");
   Serial1.print("IP address: ");
   Serial1.println(WiFi.localIP());
+  configTime(0, 0, "europe.pool.ntp.org", "pool.ntp.org");
   //Udp.beginMulticast(multicastIP, multicastPort);
+  timeClient.begin();
+  Serial1.println(timeClient.getEpochTime());
 }
 
 void loop() {
@@ -221,5 +257,6 @@ void loop() {
       displayScreen --;
       showDisplay();
     }
+    Serial1.println(timeClient.getEpochTime());
   }
 }
