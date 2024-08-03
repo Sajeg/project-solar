@@ -68,6 +68,7 @@ void checkMotion() {
   } else {
     if (pirState == HIGH) {
       Serial1.println("Motion ended!");
+      tm.displayNum(0);
       tm.clearDisplay();
       tm.set(0);
       pirState = LOW;
@@ -80,32 +81,10 @@ void showDisplay() {
     return;
   }
   if (displayScreen == 0) {
-    currentProd();
-  } else if (displayScreen == 1) {
     currentUse();
-  } else if (displayScreen == 2) {
+  } else if (displayScreen == 1) {
     currentPercent();
   }
-}
-
-void currentProd() {
-  tm.displayStr("ROOF");
-  delay(500);
-  // Process Multicast data
-  // uint8_t packetBuffer[608];
-  // int packetSize = Udp.parsePacket();
-
-  // if (packetSize) {
-  //   Udp.read(packetBuffer, sizeof(packetBuffer));
-  //   EnergyData energyData = parseEnergyMeter(packetBuffer, packetSize);
-  //   tm.displayNum(energyData.pconsume);
-  // }
-
-  // But for this simulated env we use:
-  EnergyData energyData = {};
-  energyData.pconsume = 10.00;
-  energyData.psupply = 3195.80;
-  tm.displayNum(energyData.pconsume);
 }
 
 void currentUse() {
@@ -123,17 +102,28 @@ void currentUse() {
 
   // But for this simulated env we use:
   EnergyData energyData = {};
-  energyData.pconsume = 0.00;
-  energyData.psupply = 3195.80;
+  energyData.pconsume = 2680.0;
+  energyData.psupply = 0.0;
+  int decimal = 0;
 
   float displayValue;
   if (energyData.psupply > 0) {
-    displayValue = energyData.psupply / 1000;
+    if (energyData.psupply < 999) {
+      displayValue = energyData.psupply;
+    } else {
+      displayValue = energyData.psupply / 1000;
+      decimal = 2;
+    }
   } else {
-    displayValue = -energyData.pconsume / 1000.0;
+    if (energyData.pconsume < 999) {
+      displayValue -= energyData.pconsume;
+    } else {
+      displayValue -= energyData.pconsume / 1000.0;
+      decimal = 2;
+    }
   }
 
-  tm.displayNum(displayValue, 2);
+  tm.displayNum(displayValue, decimal, true);
 }
 
 void currentPercent() {
