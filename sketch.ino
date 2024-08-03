@@ -62,8 +62,8 @@ void checkMotion() {
     if (pirState == LOW) {
       Serial1.println("Motion detected!");
       tm.set(7);
-      showDisplay();
       pirState = HIGH;
+      showDisplay();
     }
   } else {
     if (pirState == HIGH) {
@@ -89,7 +89,7 @@ void showDisplay() {
 }
 
 void currentProd() {
-  tm.displayStr("CONS");
+  tm.displayStr("ROOF");
   delay(500);
   // Process Multicast data
   // uint8_t packetBuffer[608];
@@ -109,7 +109,7 @@ void currentProd() {
 }
 
 void currentUse() {
-  tm.displayStr("SPLY");
+  tm.displayStr("NET");
   delay(500);
   // Process Multicast data
   // uint8_t packetBuffer[608];
@@ -123,9 +123,17 @@ void currentUse() {
 
   // But for this simulated env we use:
   EnergyData energyData = {};
-  energyData.pconsume = 10.00;
+  energyData.pconsume = 0.00;
   energyData.psupply = 3195.80;
-  tm.displayNum(energyData.psupply);
+
+  float displayValue;
+  if (energyData.psupply > 0) {
+    displayValue = energyData.psupply / 1000;
+  } else {
+    displayValue = -energyData.pconsume / 1000.0;
+  }
+
+  tm.displayNum(displayValue, 2);
 }
 
 void currentPercent() {
