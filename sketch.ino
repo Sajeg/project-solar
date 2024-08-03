@@ -22,6 +22,7 @@ IPAddress multicastIP(239,12,255,254);
 volatile int clkLastState;
 unsigned int counter = 0;
 int displayScreen = 0;
+int lastClk = HIGH;
 int pirState = LOW;  
 int val = 0;
 
@@ -41,30 +42,18 @@ WiFiClientSecure client;
 HTTPClient http;
 // API for the percentage of renewable energy in germany: https://api.energy-charts.info/ren_share?country=de
 
+// Not being used
 void readEncoder() {
-  int clkState = digitalRead(ENCODER_CLK);
-  int dtState = digitalRead(ENCODER_DT);
-
-  if (clkState != clkLastState) {
-    if (dtState != clkState) {
-      if(displayScreen >= 2) {
-        displayScreen = -1;
-      }
-      displayScreen++;
-      Serial1.println("Up");
-    } else {
-      if(displayScreen <= 0) {
-        displayScreen = 3;
-      }
-      displayScreen--;
-      Serial1.println("Down");
-    }
+  int dtValue = digitalRead(ENCODER_DT);
+  Serial1.println(dtValue);
+  if (dtValue == HIGH) {
+    Serial1.println("Rotated clockwise ⏩");
+  } else if (dtValue == LOW) {
+    Serial1.println("Rotated counterclockwise ⏪");
   }
-  Serial1.println(displayScreen);
-
-  clkLastState = clkState;
 
   showDisplay();
+
 }
 
 void checkMotion() {
@@ -87,7 +76,6 @@ void checkMotion() {
 }
 
 void showDisplay() {
-  Serial1.println("Showing a Display");
   if (pirState != HIGH) {
     return;
   }
@@ -102,6 +90,7 @@ void showDisplay() {
 
 void currentProd() {
   tm.displayStr("CONS");
+  delay(500);
   // Process Multicast data
   // uint8_t packetBuffer[608];
   // int packetSize = Udp.parsePacket();
@@ -114,13 +103,14 @@ void currentProd() {
 
   // But for this simulated env we use:
   EnergyData energyData = {};
-  energyData.pconsume = 0.00;
+  energyData.pconsume = 10.00;
   energyData.psupply = 3195.80;
   tm.displayNum(energyData.pconsume);
 }
 
 void currentUse() {
   tm.displayStr("SPLY");
+  delay(500);
   // Process Multicast data
   // uint8_t packetBuffer[608];
   // int packetSize = Udp.parsePacket();
@@ -133,19 +123,19 @@ void currentUse() {
 
   // But for this simulated env we use:
   EnergyData energyData = {};
-  energyData.pconsume = 0.00;
+  energyData.pconsume = 10.00;
   energyData.psupply = 3195.80;
   tm.displayNum(energyData.psupply);
 }
 
 void currentPercent() {
   tm.displayStr("Perc");
-  Serial1.println("Requesting");
-  client.setInsecure();
-  http.begin(client, "https://api.energy-charts.info/ren_share?country=de");
-  http.GET();
-  Serial1.print(http.getString());
-  http.end();
+  // Serial1.println("Requesting");
+  // client.setInsecure();
+  // http.begin(client, "https://api.energy-charts.info/ren_share?country=de");
+  // http.GET();
+  // Serial1.print(http.getString());
+  // http.end();
 }
 
 // Reworked approache, based on this: https://github.com/datenschuft/SMA-EM/
@@ -193,7 +183,8 @@ void setup() {
   pinMode(PIR_DT, INPUT);
   tm.init();
   tm.set(BRIGHT_TYPICAL);
-  attachInterrupt(digitalPinToInterrupt(ENCODER_CLK), readEncoder, CHANGE);
+  // Switched to version in loop because this had a issue, that I couldn't fix
+  // attachInterrupt(digitalPinToInterrupt(ENCODER_CLK), readEncoder, CHANGE);
   clkLastState = digitalRead(ENCODER_CLK);
   Serial1.println("Started");
 
@@ -211,4 +202,23 @@ void setup() {
 
 void loop() {
   checkMotion();
+  int newClk = digitalRead(ENCODER_CLK);
+  if (newClk != lastClk) {
+    lastClk = newClk;
+    int dtValue = digitalRead(ENCODER_DT);
+    if (newClk == LOW && dtValue == HIGH) {
+      if(displayScreen >= 2) {
+        displayScreen = -1;
+      }
+      displayScreen ++;
+      showDisplay();
+    }
+    if (newClk == LOW && dtValue == LOW) {
+      if(displayScreen <= 0) {
+        displayScreen = 3;
+      }
+      displayScreen --;
+      showDisplay();
+    }
+  }
 }
