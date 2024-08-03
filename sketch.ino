@@ -12,7 +12,7 @@ const char* ssid = "Wokwi-GUEST";
 const char* password = "";
 
 WiFiUDP Udp;
-NTPClient timeClient(Udp);
+
 unsigned int multicastPort = 9522;
 IPAddress multicastIP(239,12,255,254);
 
@@ -47,19 +47,10 @@ WiFiClientSecure client;
 HTTPClient http;
 // API for the percentage of renewable energy in germany: https://api.energy-charts.info/ren_share?country=de
 
-// Not being used
-void readEncoder() {
-  int dtValue = digitalRead(ENCODER_DT);
-  Serial1.println(dtValue);
-  if (dtValue == HIGH) {
-    Serial1.println("Rotated clockwise ⏩");
-  } else if (dtValue == LOW) {
-    Serial1.println("Rotated counterclockwise ⏪");
-  }
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, "pool.ntp.org", 3600, 60000);
 
-  showDisplay();
-
-}
+unsigned long unixTimestamp;
 
 void checkMotion() {
   val = digitalRead(PIR_DT);
@@ -147,14 +138,14 @@ void apiRequest() {
     return;
   }
 
-  timeClient.update();
-
   JsonArray data = doc[0]["data"];
   JsonArray time = doc[0]["xAxisValues"];
   float latestValue = 0.0;
-  long currentTime = 1722710273;
+  unixTimestamp = timeClient.getEpochTime();
+  
   for(int i = 0; i < (time.size() - 1); i++) {
-    if((time[i] <= currentTime) && (currentTime < time[i+1])) {
+    Serial1.println(data[i].as<String>());
+    if((time[i] <= unixTimestamp) && (unixTimestamp < time[i+1])) {
       float latestValue = data[i];
       break;
     }
@@ -170,6 +161,7 @@ void currentPercent() {
   // Should be in another thread, but browser crashes
   // multicore_launch_core1(apiRequest);
   apiRequest();
+  delay(10000);
 }
 
 // Reworked approache, based on this: https://github.com/datenschuft/SMA-EM/
@@ -231,10 +223,8 @@ void setup() {
   Serial1.println("Connected");
   Serial1.print("IP address: ");
   Serial1.println(WiFi.localIP());
-  configTime(0, 0, "europe.pool.ntp.org", "pool.ntp.org");
   //Udp.beginMulticast(multicastIP, multicastPort);
-  timeClient.begin();
-  Serial1.println(timeClient.getEpochTime());
+  timeClient.update();
 }
 
 void loop() {
@@ -257,6 +247,5 @@ void loop() {
       displayScreen --;
       showDisplay();
     }
-    Serial1.println(timeClient.getEpochTime());
   }
 }
