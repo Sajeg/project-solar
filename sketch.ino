@@ -33,12 +33,12 @@ int val = 0;
 
 // Only the total data and without cosphi and frequency as I don't need them
 struct EnergyData {
-    float pconsume;
-    float psupply;
-    float qconsume;
-    float qsupply;
-    float sconsume;
-    float ssupply;
+  float pconsume;
+  float psupply;
+  float qconsume;
+  float qsupply;
+  float sconsume;
+  float ssupply;
 };
 
 TM1637 tm(DISPLAY_CLK, DISPLAY_DT);
@@ -54,21 +54,57 @@ unsigned long unixTimestamp;
 
 void checkMotion() {
   val = digitalRead(PIR_DT);
+  digitalWrite(LED_BUILTIN, val);
   if (val == HIGH) {
     if (pirState == LOW) {
-      Serial1.println("Motion detected!");
+      Serial.println("Motion detected!");
       tm.set(7);
       pirState = HIGH;
       showDisplay();
     }
   } else {
     if (pirState == HIGH) {
-      Serial1.println("Motion ended!");
+      Serial.println("Motion ended!");
       tm.displayNum(0);
       tm.clearDisplay();
       tm.set(0);
       pirState = LOW;
     }
+  }
+}
+
+void fetchData() {
+  // Process Multicast data
+  uint8_t packetBuffer[608];
+  int packetSize = Udp.parsePacket();
+  int decimal = 0;
+  bool minus = false;
+
+  if (packetSize) {
+    Udp.read(packetBuffer, sizeof(packetBuffer));
+    EnergyData energyData = parseEnergyMeter(packetBuffer, packetSize);
+    Serial.println(energyData.psupply);
+    Serial.println(energyData.pconsume);
+    float displayValue;
+    if (energyData.psupply > 0) {
+      minus = false;
+      if (energyData.psupply < 999) {
+        displayValue = energyData.psupply;
+      } else {
+        displayValue = energyData.psupply / 1000;
+        decimal = 2;
+      }
+    } else {
+      minus = true;
+      if (energyData.pconsume < 999) {
+        displayValue -= energyData.pconsume;
+      } else {
+        displayValue -= energyData.pconsume / 1000.0;
+        decimal = 2;
+      }
+    }
+
+    tm.displayNum(displayValue, decimal, minus);
   }
 }
 
@@ -86,46 +122,20 @@ void showDisplay() {
 void currentUse() {
   tm.displayNum(0);
   tm.displayStr("NET");
-  delay(500);
-  // Process Multicast data
-  // uint8_t packetBuffer[608];
-  // int packetSize = Udp.parsePacket();
-
-  // if (packetSize) {
-  //   Udp.read(packetBuffer, sizeof(packetBuffer));
-  //   EnergyData energyData = parseEnergyMeter(packetBuffer, packetSize);
-  //   tm.displayNum(energyData.psupply);
-  // }
+  fetchData();
 
   // But for this simulated env we use:
+  /*
   EnergyData energyData = {};
   energyData.pconsume = 2680.0;
   energyData.psupply = 0.0;
   int decimal = 0;
-
-  float displayValue;
-  if (energyData.psupply > 0) {
-    if (energyData.psupply < 999) {
-      displayValue = energyData.psupply;
-    } else {
-      displayValue = energyData.psupply / 1000;
-      decimal = 2;
-    }
-  } else {
-    if (energyData.pconsume < 999) {
-      displayValue -= energyData.pconsume;
-    } else {
-      displayValue -= energyData.pconsume / 1000.0;
-      decimal = 2;
-    }
-  }
-
-  tm.displayNum(displayValue, decimal, true);
+  */
 }
 
 void apiRequest() {
   DynamicJsonDocument doc(2048);
-  Serial1.println("Requesting");
+  Serial.println("Requesting");
   client.setInsecure();
   http.useHTTP10(true);
   http.begin(client, "https://api.energy-charts.info/ren_share?country=de");
@@ -133,8 +143,8 @@ void apiRequest() {
   DeserializationError error = deserializeJson(doc, http.getStream());
 
   if (error) {
-    Serial1.print("deserializeJson() failed: ");
-    Serial1.println(error.c_str());
+    Serial.print("deserializeJson() failed: ");
+    Serial.println(error.c_str());
     return;
   }
 
@@ -142,15 +152,15 @@ void apiRequest() {
   JsonArray time = doc[0]["xAxisValues"];
   float latestValue = 0.0;
   unixTimestamp = timeClient.getEpochTime();
-  
-  for(int i = 0; i < (time.size() - 1); i++) {
+
+  for (int i = 0; i < (time.size() - 1); i++) {
     Serial1.println(data[i].as<String>());
-    if((time[i] <= unixTimestamp) && (unixTimestamp < time[i+1])) {
+    if ((time[i] <= unixTimestamp) && (unixTimestamp < time[i + 1])) {
       float latestValue = data[i];
       break;
     }
   }
-  
+
   tm.displayNum(latestValue);
   http.end();
 }
@@ -166,53 +176,53 @@ void currentPercent() {
 
 // Reworked approache, based on this: https://github.com/datenschuft/SMA-EM/
 EnergyData parseEnergyMeter(uint8_t* packetBuffer, int packetSize) {
-    EnergyData data = {};
+  EnergyData data = {};
 
-    // 28 is the Header, so if it's smaller than the Header it can't be right
-    if (packetSize < 28 || memcmp(packetBuffer, "SMA", 3) != 0) {
-        return data;
-    }
-
-    int position = 28;
-    while (position < packetSize) {
-        uint16_t measurement = (packetBuffer[position] << 8) | packetBuffer[position + 1];
-        uint8_t datatype = packetBuffer[position + 2];
-
-        if (datatype == 4) {
-            int32_t value = (packetBuffer[position + 4] << 24) | (packetBuffer[position + 5] << 16) |
-                            (packetBuffer[position + 6] << 8) | packetBuffer[position + 7];
-            float scaledValue = value / 10.0f;
-
-            switch (measurement) {
-                case 1: data.pconsume = scaledValue; break;
-                case 2: data.psupply = scaledValue; break;
-                case 3: data.qconsume = scaledValue; break;
-                case 4: data.qsupply = scaledValue; break;
-                case 9: data.sconsume = scaledValue; break;
-                case 10: data.ssupply = scaledValue; break;
-            }
-            position += 8;
-        } else if (datatype == 8) {
-            position += 12;
-        } else {
-            position += 8;
-        }
-    }
-
+  // 28 is the Header, so if it's smaller than the Header it can't be right
+  if (packetSize < 28 || memcmp(packetBuffer, "SMA", 3) != 0) {
     return data;
+  }
+
+  int position = 28;
+  while (position < packetSize) {
+    uint16_t measurement = (packetBuffer[position] << 8) | packetBuffer[position + 1];
+    uint8_t datatype = packetBuffer[position + 2];
+
+    if (datatype == 4) {
+      int32_t value = (packetBuffer[position + 4] << 24) | (packetBuffer[position + 5] << 16) | (packetBuffer[position + 6] << 8) | packetBuffer[position + 7];
+      float scaledValue = value / 10.0f;
+
+      switch (measurement) {
+        case 1: data.pconsume = scaledValue; break;
+        case 2: data.psupply = scaledValue; break;
+        case 3: data.qconsume = scaledValue; break;
+        case 4: data.qsupply = scaledValue; break;
+        case 9: data.sconsume = scaledValue; break;
+        case 10: data.ssupply = scaledValue; break;
+      }
+      position += 8;
+    } else if (datatype == 8) {
+      position += 12;
+    } else {
+      position += 8;
+    }
+  }
+
+  return data;
 }
 
 void setup() {
-  Serial1.begin(115200);
-  pinMode(ENCODER_CLK, INPUT);
-  pinMode(ENCODER_DT, INPUT);
+  Serial.begin(115200);
+  Serial.println("Started");
+  //pinMode(ENCODER_CLK, INPUT);
+  // pinMode(ENCODER_DT, INPUT);
   pinMode(PIR_DT, INPUT);
   tm.init();
   tm.set(BRIGHT_TYPICAL);
   // Switched to version in loop because this had a issue, that I couldn't fix
   // attachInterrupt(digitalPinToInterrupt(ENCODER_CLK), readEncoder, CHANGE);
-  clkLastState = digitalRead(ENCODER_CLK);
-  Serial1.println("Started");
+  //clkLastState = digitalRead(ENCODER_CLK);
+
 
   WiFi.begin(ssid, password);
   Serial1.print("Connecting to WiFi..");
@@ -220,15 +230,19 @@ void setup() {
     delay(500);
     Serial.print(".");
   }
-  Serial1.println("Connected");
-  Serial1.print("IP address: ");
-  Serial1.println(WiFi.localIP());
-  //Udp.beginMulticast(multicastIP, multicastPort);
-  timeClient.update();
+  Serial.println("Connected");
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+  Udp.beginMulticast(multicastIP, multicastPort);
+  //timeClient.update();
 }
 
 void loop() {
   checkMotion();
+  if (pirState == HIGH) { 
+    fetchData();
+  }
+  /*
   int newClk = digitalRead(ENCODER_CLK);
   if (newClk != lastClk) {
     lastClk = newClk;
@@ -248,4 +262,5 @@ void loop() {
       showDisplay();
     }
   }
+  */
 }
